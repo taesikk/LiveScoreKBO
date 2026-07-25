@@ -6,6 +6,8 @@ HOMERUN_KEYWORDS = ("홈런",)
 HIT_KEYWORDS = ("안타", "1루타", "2루타", "3루타")
 STEAL_KEYWORDS = ("도루",)
 DOUBLE_PLAY_KEYWORDS = ("병살",)
+OUT_KEYWORDS = ("아웃",)
+WALK_KEYWORDS = ("볼넷",)
 GAME_END_KEYWORDS = ("승리투수", "경기 종료", "경기종료")
 
 
@@ -39,6 +41,14 @@ def _is_double_play(event: RelayEvent) -> bool:
     return any(keyword in event.text for keyword in DOUBLE_PLAY_KEYWORDS)
 
 
+def _is_out(event: RelayEvent) -> bool:
+    return any(keyword in event.text for keyword in OUT_KEYWORDS)
+
+
+def _is_walk(event: RelayEvent) -> bool:
+    return any(keyword in event.text for keyword in WALK_KEYWORDS)
+
+
 def _is_game_end(event: RelayEvent) -> bool:
     return any(keyword in event.text for keyword in GAME_END_KEYWORDS)
 
@@ -70,6 +80,12 @@ def filter_important_events(events: list[RelayEvent]) -> list[ImportantEvent]:
 
         if _is_double_play(event):
             reasons.append("병살")
+
+        if _is_out(event):
+            reasons.append("아웃")
+
+        if _is_walk(event):
+            reasons.append("볼넷")
 
         if _is_game_end(event):
             reasons.append("경기종료")

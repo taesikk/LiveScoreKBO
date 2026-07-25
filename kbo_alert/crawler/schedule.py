@@ -18,6 +18,7 @@ class ScheduledGame:
     away_team_code: str
     away_team_name: str
     status_code: str  # "BEFORE" | "LIVE" | "RESULT" 등
+    status_info: str  # 예: "경기전", 우천취소 시 관련 문구가 들어올 것으로 예상 (미검증)
     cancel: bool
 
 
@@ -47,6 +48,7 @@ def fetch_games_on(day: date) -> list[ScheduledGame]:
             away_team_code=g["awayTeamCode"],
             away_team_name=g["awayTeamName"],
             status_code=g["statusCode"],
+            status_info=g.get("statusInfo", ""),
             cancel=g["cancel"],
         )
         for g in data["result"]["games"]

@@ -1,9 +1,10 @@
 import logging
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from kbo_alert.active_hours import is_active_hours
-from kbo_alert.config import TEAM_CODE
+from kbo_alert.config import TEAM_SLACK_CHANNELS
 from kbo_alert.crawler import EventStore, ScheduledGame, fetch_relay_events, find_team_game
 from kbo_alert.notifier import filter_important_events, format_event
 from kbo_alert.slack.client import send_message
@@ -18,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
-def poll_once(game_id: str, store: EventStore) -> None:
+def poll_once(game_id: str, store: EventStore, channel: str) -> None:
     events = fetch_relay_events(game_id)
 
     # 전체 스냅샷 기준으로 먼저 중요 이벤트를 판별한 뒤(역전/만루/이닝종료는
@@ -32,19 +33,26 @@ def poll_once(game_id: str, store: EventStore) -> None:
 
     for important_event in new_important_events:
         message = format_event(important_event)
-        send_message(message)
-        logger.info("Sent (%s): %s", ",".join(important_event.reasons), message)
+        try:
+            send_message(message, channel=channel)
+        except Exception:
+            # 이 이벤트는 store에 이미 처리됨으로 기록됐으니 재전송은 안 되지만,
+            # 최소한 배치 안의 나머지 이벤트들은 계속 보내야 한다.
+            logger.exception("Failed to send message to %s: %s", channel, message)
+            continue
+        logger.info("Sent to %s (%s): %s", channel, ",".join(important_event.reasons), message)
 
 
 def _find_todays_game(team_code: str, today: date) -> ScheduledGame | None:
     if today.weekday() == MONDAY:
-        logger.info("Monday - KBO has no games, skipping schedule lookup")
+        logger.info("Monday - KBO has no games, skipping schedule lookup for %s", team_code)
         return None
 
     game = find_team_game(team_code, today)
     if game:
         logger.info(
-            "Today's game: %s vs %s (%s), starts %s",
+            "Today's game for %s: %s vs %s (%s), starts %s",
+            team_code,
             game.home_team_name,
             game.away_team_name,
             game.game_id,
@@ -55,53 +63,102 @@ def _find_todays_game(team_code: str, today: date) -> ScheduledGame | None:
     return game
 
 
-def run(team_code: str = TEAM_CODE) -> None:
-    store = EventStore()
-    logger.info("Starting KBO relay bot for team %s", team_code)
+def _no_game_reason(today: date) -> str:
+    if today.weekday() == MONDAY:
+        return "월요일은 KBO 경기가 없는 날입니다."
+    return "오늘 예정된 경기가 없습니다."
 
+
+@dataclass
+class TeamState:
+    team_code: str
+    channel: str
     checked_date: date | None = None
     todays_game: ScheduledGame | None = None
-    confirmed = False  # 경기 시작 10분 전 취소 여부 재확인 완료했는지
+    confirmed: bool = False  # 경기 시작 10분 전 취소 여부 재확인 완료했는지
+    announced: bool = False  # 오늘 경기 안내(또는 경기없음/취소 안내)를 이미 보냈는지
+
+
+def _step(state: TeamState, store: EventStore) -> bool:
+    """이 팀에 대해 한 틱 처리. 실제로 폴링했으면 True.
+
+    아래 send_message 호출들은 일부러 try/except로 감싸지 않는다 - 실패하면 예외가
+    run()의 팀별 try/except까지 전파되고, 그 시점엔 아직 관련 플래그(announced/confirmed 등)를
+    갱신하기 전이라 다음 틱에 자동으로 재시도된다.
+    """
+    today = date.today()
+    if state.checked_date != today:
+        # 일정 조회가 실패해도(네트워크 오류 등) checked_date를 먼저 바꾸지 않아야
+        # 다음 틱에 오늘 일정을 다시 조회한다.
+        game = _find_todays_game(state.team_code, today)
+        state.checked_date = today
+        state.confirmed = False
+        state.announced = False
+        state.todays_game = game
+
+    if state.todays_game is None:
+        if not state.announced:
+            # 경기가 없는 날은 "시작 시각"이 없으니, 확인되는 즉시 한 번만 안내한다.
+            message = f"[{state.team_code}] 오늘 경기 없음 - {_no_game_reason(today)}"
+            send_message(message, channel=state.channel)
+            logger.info("Sent to %s (경기없음): %s", state.channel, message)
+            state.announced = True
+        return False
+
+    if not state.confirmed:
+        confirm_at = state.todays_game.game_datetime - CANCEL_CHECK_LEAD_TIME
+        if datetime.now() < confirm_at:
+            return False
+
+        latest = find_team_game(state.team_code, today)
+        if latest is None or latest.cancel:
+            reason = (latest.status_info if latest else None) or "사유 확인 불가"
+            logger.info("Game cancelled for %s: %s", state.team_code, reason)
+            send_message(f"[{state.team_code}] 오늘 경기 취소 - {reason}", channel=state.channel)
+            state.todays_game = None
+            state.announced = True
+            return False
+
+        state.todays_game = latest
+        state.confirmed = True
+        logger.info("Confirmed not cancelled for %s, starting polling", state.team_code)
+
+    if not state.announced and datetime.now() >= state.todays_game.game_datetime:
+        game = state.todays_game
+        message = f"[{state.team_code}] 오늘 경기: {game.home_team_name} vs {game.away_team_name} ({game.stadium})"
+        send_message(message, channel=state.channel)
+        logger.info("Sent to %s (경기안내): %s", state.channel, message)
+        state.announced = True
+
+    if not is_active_hours():
+        return False
+
+    try:
+        poll_once(state.todays_game.game_id, store, state.channel)
+    except Exception:
+        logger.exception("Error during polling cycle for %s", state.team_code)
+
+    return True
+
+
+def _safe_step(state: TeamState, store: EventStore) -> bool:
+    """한 팀 처리 중 어떤 예외가 나도 여기서 멈추고, 다른 팀/다음 틱에 영향 안 주게 한다."""
+    try:
+        return _step(state, store)
+    except Exception:
+        logger.exception("Unhandled error while processing %s - will retry next tick", state.team_code)
+        return False
+
+
+def run(team_channels: dict[str, str] = TEAM_SLACK_CHANNELS) -> None:
+    store = EventStore()
+    states = [TeamState(team_code=code, channel=channel) for code, channel in team_channels.items()]
+    logger.info("Starting KBO relay bot for teams: %s", ", ".join(team_channels))
 
     try:
         while True:
-            today = date.today()
-            if checked_date != today:
-                checked_date = today
-                confirmed = False
-                todays_game = _find_todays_game(team_code, today)
-
-            if todays_game is None:
-                time.sleep(IDLE_CHECK_INTERVAL_SECONDS)
-                continue
-
-            if not confirmed:
-                confirm_at = todays_game.game_datetime - CANCEL_CHECK_LEAD_TIME
-                if datetime.now() < confirm_at:
-                    time.sleep(IDLE_CHECK_INTERVAL_SECONDS)
-                    continue
-
-                latest = find_team_game(team_code, today)
-                if latest is None or latest.cancel:
-                    logger.info("Game cancelled, skipping for today")
-                    todays_game = None
-                    time.sleep(IDLE_CHECK_INTERVAL_SECONDS)
-                    continue
-
-                todays_game = latest
-                confirmed = True
-                logger.info("Confirmed not cancelled, starting polling")
-
-            if not is_active_hours():
-                time.sleep(IDLE_CHECK_INTERVAL_SECONDS)
-                continue
-
-            try:
-                poll_once(todays_game.game_id, store)
-            except Exception:
-                logger.exception("Error during polling cycle")
-
-            time.sleep(POLL_INTERVAL_SECONDS)
+            polled = [_safe_step(state, store) for state in states]
+            time.sleep(POLL_INTERVAL_SECONDS if any(polled) else IDLE_CHECK_INTERVAL_SECONDS)
     finally:
         store.close()
 

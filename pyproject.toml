@@ -14,4 +14,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["kbo_alert", "kbo_alert.slack", "kbo_alert.crawler", "kbo_alert.notifier"]
+packages = ["kbo_alert", "kbo_alert.slack", "kbo_alert.crawler", "kbo_alert.notifier", "news_briefing"]

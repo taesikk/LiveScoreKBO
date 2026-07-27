@@ -13,7 +13,12 @@ kbo_alert/crawler/schedule.py
 kbo_alert/crawler/store.py
 kbo_alert/notifier/__init__.py
 kbo_alert/notifier/filters.py
+kbo_alert/notifier/formatter.py
 kbo_alert/notifier/prompts.py
 kbo_alert/notifier/summarizer.py
 kbo_alert/slack/__init__.py
 kbo_alert/slack/client.py
+news_briefing/__init__.py
+news_briefing/config.py
+news_briefing/fetcher.py
+news_briefing/formatter.py

@@ -38,8 +38,12 @@ cp "$REPO_DIR"/deploy/news-briefing.service /etc/systemd/system/
 cp "$REPO_DIR"/deploy/news-briefing.timer /etc/systemd/system/
 systemctl daemon-reload
 
-systemctl enable --now kbo-alert.service
-systemctl enable --now news-briefing.timer
+# enable --now은 이미 떠있는 서비스는 재시작시키지 않으므로(이미 active면 no-op),
+# 재배포 때 새 코드가 실제로 적용되도록 enable과 restart를 분리해서 항상 재시작한다.
+systemctl enable kbo-alert.service
+systemctl restart kbo-alert.service
+systemctl enable news-briefing.timer
+systemctl restart news-briefing.timer
 
 echo "완료."
 echo "  KBO 봇 상태:      systemctl status kbo-alert.service"

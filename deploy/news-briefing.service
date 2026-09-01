@@ -1,0 +1,11 @@
+[Unit]
+Description=Send daily news briefing to Slack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=livescorekbo
+WorkingDirectory=/opt/livescorekbo
+EnvironmentFile=/opt/livescorekbo/.env
+ExecStart=/opt/livescorekbo/.venv/bin/python scripts/send_news_briefing.py

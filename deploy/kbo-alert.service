@@ -1,0 +1,16 @@
+[Unit]
+Description=KBO relay alert bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=livescorekbo
+WorkingDirectory=/opt/livescorekbo
+EnvironmentFile=/opt/livescorekbo/.env
+ExecStart=/opt/livescorekbo/.venv/bin/python scripts/run_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

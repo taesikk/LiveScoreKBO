@@ -1,0 +1,9 @@
+[Unit]
+Description=Run news-briefing.service daily at 08:00 (VM 로컬 타임존 기준 - timedatectl로 KST인지 먼저 확인)
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

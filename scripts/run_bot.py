@@ -28,7 +28,7 @@ def poll_once(game_id: str, store: EventStore, channel: str) -> None:
     important_events = filter_important_events(events)
     important_by_seqno = {ie.event.seqno: ie for ie in important_events}
 
-    new_relay_events = store.filter_new([ie.event for ie in important_events])
+    new_relay_events = store.filter_new([ie.event for ie in important_events], channel)
     new_important_events = [important_by_seqno[e.seqno] for e in new_relay_events]
 
     for important_event in new_important_events:

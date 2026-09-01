@@ -8,6 +8,7 @@ from kbo_alert.config import TEAM_SLACK_CHANNELS
 from kbo_alert.crawler import EventStore, ScheduledGame, fetch_relay_events, find_team_game
 from kbo_alert.notifier import filter_important_events, format_event
 from kbo_alert.slack.client import send_message
+from kbo_alert.timezone import KST
 
 MONDAY = 0  # date.weekday()의 월요일 값, KBO는 월요일에 경기가 없음
 
@@ -86,7 +87,7 @@ def _step(state: TeamState, store: EventStore) -> bool:
     run()의 팀별 try/except까지 전파되고, 그 시점엔 아직 관련 플래그(announced/confirmed 등)를
     갱신하기 전이라 다음 틱에 자동으로 재시도된다.
     """
-    today = date.today()
+    today = datetime.now(KST).date()
     if state.checked_date != today:
         # 일정 조회가 실패해도(네트워크 오류 등) checked_date를 먼저 바꾸지 않아야
         # 다음 틱에 오늘 일정을 다시 조회한다.
@@ -107,7 +108,7 @@ def _step(state: TeamState, store: EventStore) -> bool:
 
     if not state.confirmed:
         confirm_at = state.todays_game.game_datetime - CANCEL_CHECK_LEAD_TIME
-        if datetime.now() < confirm_at:
+        if datetime.now(KST) < confirm_at:
             return False
 
         latest = find_team_game(state.team_code, today)
@@ -123,7 +124,7 @@ def _step(state: TeamState, store: EventStore) -> bool:
         state.confirmed = True
         logger.info("Confirmed not cancelled for %s, starting polling", state.team_code)
 
-    if not state.announced and datetime.now() >= state.todays_game.game_datetime:
+    if not state.announced and datetime.now(KST) >= state.todays_game.game_datetime:
         game = state.todays_game
         message = f"[{state.team_code}] 오늘 경기: {game.home_team_name} vs {game.away_team_name} ({game.stadium})"
         send_message(message, channel=state.channel)

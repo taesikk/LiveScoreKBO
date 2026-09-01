@@ -3,6 +3,8 @@ from datetime import datetime
 
 import requests
 
+from kbo_alert.timezone import KST
+
 API_URL = "https://api-gw.sports.naver.com/schedule/games/{game_id}/relay"
 REFERER = "https://m.sports.naver.com/game/{game_id}/relay"
 USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -41,7 +43,7 @@ def fetch_relay_events(game_id: str) -> list[RelayEvent]:
     response.raise_for_status()
     data = response.json()
 
-    collected_at = datetime.now()
+    collected_at = datetime.now(KST)
     groups = data["result"]["textRelayData"]["textRelays"]
 
     events = []

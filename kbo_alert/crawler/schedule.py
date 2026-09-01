@@ -3,6 +3,8 @@ from datetime import date, datetime
 
 import requests
 
+from kbo_alert.timezone import KST
+
 SCHEDULE_API_URL = "https://api-gw.sports.naver.com/schedule/games"
 REFERER = "https://m.sports.naver.com/"
 USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -41,7 +43,7 @@ def fetch_games_on(day: date) -> list[ScheduledGame]:
     return [
         ScheduledGame(
             game_id=g["gameId"],
-            game_datetime=datetime.fromisoformat(g["gameDateTime"]),
+            game_datetime=datetime.fromisoformat(g["gameDateTime"]).replace(tzinfo=KST),
             stadium=g["stadium"],
             home_team_code=g["homeTeamCode"],
             home_team_name=g["homeTeamName"],
@@ -57,7 +59,7 @@ def fetch_games_on(day: date) -> list[ScheduledGame]:
 
 def find_team_game(team_code: str, day: date | None = None) -> ScheduledGame | None:
     """team_code가 홈/원정 어느 쪽이든 참여하는 그날 경기를 찾는다. 없으면 None."""
-    day = day or date.today()
+    day = day or datetime.now(KST).date()
     for game in fetch_games_on(day):
         if team_code in (game.home_team_code, game.away_team_code):
             return game

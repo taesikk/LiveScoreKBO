@@ -1,8 +1,10 @@
 [Unit]
-Description=Run news-briefing.service daily at 08:00 (VM 로컬 타임존 기준 - timedatectl로 KST인지 먼저 확인)
+Description=Run news-briefing.service daily at 08:00 KST
 
 [Timer]
-OnCalendar=*-*-* 08:00:00
+# VM이 UTC로 설정돼 있어서(확인됨) 그냥 08:00:00만 쓰면 UTC 08:00 = KST 17:00에 실행된다.
+# 타임존을 명시해서 서버 로컬 시간대와 무관하게 항상 KST 08:00에 돌게 한다.
+OnCalendar=*-*-* 08:00:00 Asia/Seoul
 Persistent=true
 
 [Install]

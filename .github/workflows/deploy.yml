@@ -1,0 +1,41 @@
+name: Deploy to Oracle VM
+
+"on":
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            cd ~/LiveScoreKBO
+            git fetch origin main
+            git reset --hard origin/main
+
+            sudo bash deploy/setup.sh
+
+            # 재시작 직후 바로 죽어있으면 배포 실패로 처리 (조용히 죽는 걸 막기 위함)
+            sleep 3
+
+            if ! sudo systemctl is-active --quiet kbo-alert.service; then
+              echo "kbo-alert.service is not active after deploy"
+              sudo journalctl -u kbo-alert.service --no-pager -n 50
+              exit 1
+            fi
+
+            if ! sudo systemctl is-active --quiet news-briefing.timer; then
+              echo "news-briefing.timer is not active after deploy"
+              exit 1
+            fi
+
+            echo "Deploy successful"

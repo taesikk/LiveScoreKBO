@@ -8,6 +8,7 @@ STEAL_KEYWORDS = ("도루",)
 DOUBLE_PLAY_KEYWORDS = ("병살",)
 OUT_KEYWORDS = ("아웃",)
 WALK_KEYWORDS = ("볼넷",)
+SCORE_KEYWORDS = ("홈인",)
 GAME_END_KEYWORDS = ("승리투수", "경기 종료", "경기종료")
 
 
@@ -49,6 +50,10 @@ def _is_walk(event: RelayEvent) -> bool:
     return any(keyword in event.text for keyword in WALK_KEYWORDS)
 
 
+def _is_score(event: RelayEvent) -> bool:
+    return any(keyword in event.text for keyword in SCORE_KEYWORDS)
+
+
 def _is_game_end(event: RelayEvent) -> bool:
     return any(keyword in event.text for keyword in GAME_END_KEYWORDS)
 
@@ -86,6 +91,9 @@ def filter_important_events(events: list[RelayEvent]) -> list[ImportantEvent]:
 
         if _is_walk(event):
             reasons.append("볼넷")
+
+        if _is_score(event):
+            reasons.append("득점")
 
         if _is_game_end(event):
             reasons.append("경기종료")

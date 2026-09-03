@@ -12,7 +12,8 @@ from kbo_alert.timezone import KST
 
 MONDAY = 0  # date.weekday()의 월요일 값, KBO는 월요일에 경기가 없음
 
-POLL_INTERVAL_SECONDS = 30
+POLL_INTERVAL_SECONDS = 15  # 문자중계 API가 "최근 이벤트 창"만 주기 때문에, 너무 뜸하게 폴링하면
+# 이닝 전환처럼 짧은 시간에 이벤트가 몰릴 때 창이 밀려서 일부를 아예 못 볼 수 있다.
 IDLE_CHECK_INTERVAL_SECONDS = 300  # 오늘 경기가 없거나 활성 시간대 밖일 때는 덜 자주 확인
 CANCEL_CHECK_LEAD_TIME = timedelta(minutes=10)  # 경기 시작 이만큼 전에 취소 여부 재확인
 
@@ -20,8 +21,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
-def poll_once(game_id: str, store: EventStore, channel: str) -> None:
+def poll_once(state: "TeamState", store: EventStore) -> None:
+    game_id = state.todays_game.game_id
+    channel = state.channel
     events = fetch_relay_events(game_id)
+
+    if events:
+        # API가 "최근 이벤트 창"만 주므로, 지난 폴링 때 본 마지막 seqno와 이번 창의
+        # 시작 seqno 사이에 빈틈이 있으면 그 사이 이벤트를 통째로 놓친 것이다.
+        current_min = min(e.seqno for e in events)
+        current_max = max(e.seqno for e in events)
+        if state.last_seqno_seen is not None and current_min > state.last_seqno_seen + 1:
+            logger.warning(
+                "%s: seqno %d~%d 사이 이벤트를 놓쳤을 수 있음 (문자중계 창이 그 사이 넘어감)",
+                channel,
+                state.last_seqno_seen + 1,
+                current_min - 1,
+            )
+        state.last_seqno_seen = current_max
 
     # 전체 스냅샷 기준으로 먼저 중요 이벤트를 판별한 뒤(역전/만루/이닝종료는
     # 직전 이벤트와 비교하는 방식이라 매 폴링마다 새로 계산해야 함),
@@ -78,6 +95,7 @@ class TeamState:
     todays_game: ScheduledGame | None = None
     confirmed: bool = False  # 경기 시작 10분 전 취소 여부 재확인 완료했는지
     announced: bool = False  # 오늘 경기 안내(또는 경기없음/취소 안내)를 이미 보냈는지
+    last_seqno_seen: int | None = None  # 문자중계 창에서 마지막으로 본 최대 seqno (유실 감지용)
 
 
 def _step(state: TeamState, store: EventStore) -> bool:
@@ -135,7 +153,7 @@ def _step(state: TeamState, store: EventStore) -> bool:
         return False
 
     try:
-        poll_once(state.todays_game.game_id, store, state.channel)
+        poll_once(state, store)
     except Exception:
         logger.exception("Error during polling cycle for %s", state.team_code)
 

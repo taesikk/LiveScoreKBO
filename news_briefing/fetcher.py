@@ -105,7 +105,14 @@ def _shares_topic(title: str, seen_titles: list[str]) -> bool:
     return False
 
 
-def fetch_category_news(category: str, query: str, count: int = 3, sort: str = "sim", exclude_local_gov: bool = False) -> list[NewsItem]:
+def fetch_category_news(
+    category: str,
+    query: str,
+    count: int = 3,
+    sort: str = "sim",
+    exclude_local_gov: bool = False,
+    exclude_links: frozenset[str] = frozenset(),
+) -> list[NewsItem]:
     headers = {
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
         "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
@@ -121,7 +128,10 @@ def fetch_category_news(category: str, query: str, count: int = 3, sort: str = "
 
     for raw in data.get("items", []):
         title = _clean_text(raw["title"])
+        link = raw.get("originallink") or raw["link"]
 
+        if link in exclude_links:
+            continue
         if _is_roundup_title(title):
             continue
         if exclude_local_gov and _is_local_gov_title(title):
@@ -135,7 +145,7 @@ def fetch_category_news(category: str, query: str, count: int = 3, sort: str = "
                 category=category,
                 title=title,
                 description=_clean_text(raw["description"]),
-                link=raw.get("originallink") or raw["link"],
+                link=link,
             )
         )
 

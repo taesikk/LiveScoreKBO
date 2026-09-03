@@ -5,7 +5,10 @@ Description=Run news-briefing.service daily at 08:00 KST
 # VM이 UTC로 설정돼 있어서(확인됨) 그냥 08:00:00만 쓰면 UTC 08:00 = KST 17:00에 실행된다.
 # 타임존을 명시해서 서버 로컬 시간대와 무관하게 항상 KST 08:00에 돌게 한다.
 OnCalendar=*-*-* 08:00:00 Asia/Seoul
-Persistent=true
+# Persistent=true를 켜두면, 08:00을 이미 지난 뒤에 타이머가 재시작될 때마다
+# "놓친 실행을 보충"한다며 즉시 재발송한다. VM은 항상 켜져있어서 이 기능이
+# 필요 없는데, CI/CD로 재배포(=타이머 재시작)할 때마다 중복 발송을 유발해서 껐다.
+Persistent=false
 
 [Install]
 WantedBy=timers.target

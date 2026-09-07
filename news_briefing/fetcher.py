@@ -8,7 +8,9 @@ from news_briefing.config import NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
 
 SEARCH_API_URL = "https://openapi.naver.com/v1/search/news.json"
 USER_AGENT = "kbo-alert-news-briefing/1.0"
-FETCH_BUFFER = 15  # 필터링으로 걸러질 걸 감안해서 필요한 개수보다 넉넉히 가져온다
+FETCH_BUFFER = 40  # 필터링으로 걸러질 걸 감안해서 필요한 개수보다 넉넉히 가져온다.
+# 15였을 때는 하나의 이슈(통신사 중복기사)가 상위권을 도배하면 중복 제거 후
+# 진짜 다른 주제가 3개도 안 남는 경우가 있었다 - 실제로 재현해서 확인했다.
 
 # 네이버 뉴스 섹션(정치/경제/IT) 크롤링은 robots.txt(Disallow: /)로 전면 금지돼 있어서,
 # 대신 공식 네이버 검색 Open API를 카테고리별 키워드 검색으로 사용한다.

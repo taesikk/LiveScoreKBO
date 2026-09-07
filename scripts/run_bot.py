@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from kbo_alert.active_hours import is_active_hours
+from kbo_alert.active_hours import is_within_game_window
 from kbo_alert.config import TEAM_SLACK_CHANNELS
 from kbo_alert.crawler import EventStore, ScheduledGame, fetch_relay_events, find_team_game
 from kbo_alert.notifier import filter_important_events, format_event
@@ -149,7 +149,7 @@ def _step(state: TeamState, store: EventStore) -> bool:
         logger.info("Sent to %s (경기안내): %s", state.channel, message)
         state.announced = True
 
-    if not is_active_hours():
+    if not is_within_game_window(state.todays_game.game_datetime):
         return False
 
     try:
